@@ -257,18 +257,41 @@ class Ruckusing_MySQLAdapter extends Ruckusing_BaseAdapter implements Ruckusing_
 	/**
 	 * Executes the schema for a db.
 	 * 
-	 * Basically splits the given SQL string into its statements and executes them one after another.
-	 * 
 	 * @param string $schemaSql The SQL statements for the schema in one string.
 	 */
 	public function executeSchema($schemaSql)
 	{
-		// This regex searches for SQL queries in a string. With it we can split a string into its SQL queries.
-		$queries = preg_split("/;+(?=([^'|^\\\']*['|\\\'][^'|^\\\']*['|\\\'])*[^'|^\\\']*[^'|^\\\']$)/", trim($schemaSql));
-		
-		foreach ($queries as $query)
+		$this->multi_query($schemaSql);
+	}
+
+	/**
+	 * Executes multiple queries at once and waits until all queries are done.
+	 *
+	 * mysqli_multi_query() is asynchronous.
+	 *
+	 * @param string $query
+	 */
+	public function multi_query($query)
+	{
+		mysqli_multi_query($this->conn, trim($query));
+
+		do
 		{
-			$this->query($query);
+			$result = mysqli_store_result($this->conn);
+
+			if($result)
+			{
+				mysqli_free_result($result);
+			}
+		}
+		while(mysqli_more_results($this->conn) && mysqli_next_result($this->conn));
+
+		if(mysqli_error($this->conn))
+		{
+			if($this->isError($result))
+			{
+				trigger_error(sprintf("Error executing 'query' with:\n%s\n\nReason: %s\n\n", $query, mysqli_error($this->conn)));
+			}
 		}
 	}
 
