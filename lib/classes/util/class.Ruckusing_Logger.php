@@ -3,9 +3,17 @@
 class Ruckusing_Logger {
   
   private $file = '';
-  
+
+  /**
+   * Whether the logfile is known from previous ruckusing commands.
+   *
+   * @var bool|null
+   */
+  private $knownFile = null;
+
   public function __construct($file) {
     $this->file = $file;
+    $this->knownFile = is_file($file);
     $this->fp = fopen($file, "a+");
     //register_shutdown_function(array("Logger", "close_log"));
   }
@@ -33,8 +41,11 @@ class Ruckusing_Logger {
   public function close() {
     if($this->fp) {
       fclose($this->fp);
-      chmod($this->file, 0777);
-    } 
+
+      if (!$this->knownFile) {
+          chmod($this->file, 0777);
+      }
+    }
   }
   
 }//class()
