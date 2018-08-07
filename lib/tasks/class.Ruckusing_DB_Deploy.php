@@ -52,29 +52,32 @@ class Ruckusing_DB_Deploy implements Ruckusing_iTask
 		{
 			$schemaTmpl = $args['TEMPLATE'];
 		}
-		
-		$filename = 'schema_'.$schemaTmpl.'.txt';
-		$filepath = RUCKUSING_DB_DIR.'/'.$filename;
-		
-		if(is_file($filepath))
-		{ // Only doing the deploy if a SQL schema file exists.
-			$schemaSql = file_get_contents($filepath);
-			$this->adapter->executeSchema($schemaSql);
-			echo "\tFinished executing SQL for schema ".date('Y-m-d g:ia T');
-			
-			$setup = new Ruckusing_DB_Setup($this->adapter);
-			$setup->execute($args);
 
-			$migrate = new Ruckusing_DB_Migrate($this->adapter);
-			$migrate->execute($args);
+        $filenameTxt = 'schema_'.$schemaTmpl.'.txt';
+        $filenameSql = 'schema_'.$schemaTmpl.'.sql';
 
-			echo "\n\nFinished deploy: " . date('Y-m-d g:ia T') . "\n\n";
-		}
-		else
-		{
-			echo "\tNo SQL schema for Template '".RUCKUSING_STANDARD_TEMPLATE."' ".date('Y-m-d g:ia T');
-			trigger_error("\nAborting db:deploy for database '".$this->adapter->getDbName()."'\n\n");
-		}
+        // We allow schemas in txt or sql (recommended) file suffix
+        if (is_file(RUCKUSING_DB_DIR.'/'.$filenameTxt)) {
+            $filepath = RUCKUSING_DB_DIR.'/'.$filenameTxt;
+        } elseif (is_file(RUCKUSING_DB_DIR.'/'.$filenameSql)) {
+            $filepath = RUCKUSING_DB_DIR.'/'.$filenameSql;
+        } else {
+            // Only doing the deploy if a SQL schema file exists.
+            echo "\tNo SQL schema for Template '".$schemaTmpl."' ".date('Y-m-d g:ia T');
+            trigger_error("\nAborting db:deploy for database '".$this->adapter->getDbName()."'\n\n");
+        }
+
+        $schemaSql = file_get_contents($filepath);
+        $this->adapter->executeSchema($schemaSql);
+        echo "\tFinished executing SQL for schema ".date('Y-m-d g:ia T');
+
+        $setup = new Ruckusing_DB_Setup($this->adapter);
+        $setup->execute($args);
+
+        $migrate = new Ruckusing_DB_Migrate($this->adapter);
+        $migrate->execute($args);
+
+        echo "\n\nFinished deploy: " . date('Y-m-d g:ia T') . "\n\n";
 	}
 }
 ?>
