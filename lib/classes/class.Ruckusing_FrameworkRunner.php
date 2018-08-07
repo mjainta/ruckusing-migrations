@@ -54,22 +54,26 @@ class Ruckusing_FrameworkRunner {
 	function __destruct() {
 	}
 	
-	//-------------------------
-	// PUBLIC METHODS
-	//-------------------------	
-	public function execute() {
-		if($this->task_mgr->has_task($this->cur_task_name)) {
-			$output = $this->task_mgr->execute($this->cur_task_name, $this->task_options);
-			$this->display_results($output);
-			exit(0); // 0 is success
-		} else {
-			trigger_error(sprintf("Task not found: %s", $this->cur_task_name));
-			exit(1);
-		}
-		if($this->logger) {
-		  $this->logger->close();
-	  }
-	}
+    //-------------------------
+    // PUBLIC METHODS
+    //-------------------------
+    public function execute() {
+        $exitcode = 0; // 0 is success
+
+        if($this->task_mgr->has_task($this->cur_task_name)) {
+            $output = $this->task_mgr->execute($this->cur_task_name, $this->task_options);
+            $this->display_results($output);
+        } else {
+            trigger_error(sprintf("Task not found: %s", $this->cur_task_name));
+            $exitcode = 1;
+        }
+
+        if($this->logger) {
+            $this->logger->close();
+        }
+
+        exit($exitcode);
+    }
 	
 	public function init_tasks() {
 		$this->task_mgr = new Ruckusing_TaskManager($this->adapter);
