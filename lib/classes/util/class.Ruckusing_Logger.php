@@ -33,6 +33,7 @@ class Ruckusing_Logger {
   public function close() {
     if($this->fp) {
       fclose($this->fp);
+      chmod($this->file, 0777);
     } 
   }
   
