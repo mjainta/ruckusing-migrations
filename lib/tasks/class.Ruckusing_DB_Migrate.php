@@ -39,8 +39,12 @@ class Ruckusing_DB_Migrate implements Ruckusing_iTask {
 	   die("This database does not support migrations.");
     }
 		$this->task_args = $args;
-		echo "Started: " . date('Y-m-d g:ia T') . "\n\n";		
-		echo "[db:migrate]: \n";
+
+        if (getenv('OUTPUT_RUCKUSING_MIGRATION')) {
+            echo "Started: " . date('Y-m-d g:ia T') . "\n\n";
+            echo "[db:migrate]: \n";
+        }
+
 		try {
   	  // Check that the schema_version table exists, and if not, automatically create it
   	  $this->verify_environment();
@@ -89,8 +93,11 @@ class Ruckusing_DB_Migrate implements Ruckusing_iTask {
 			echo "\tMigration directory does not exist: " . RUCKUSING_MIGRATION_DIR;
 		}catch(Ruckusing_Exception $ex) {
 			die("\n\n" . $ex->getMessage() . "\n\n");
-		}	
-		echo "\n\nFinished: " . date('Y-m-d g:ia T') . "\n\n";			
+		}
+
+        if (getenv('OUTPUT_RUCKUSING_MIGRATION')) {
+            echo "\n\nFinished: " . date('Y-m-d g:ia T') . "\n\n";
+        }
 	}
 	
 	private function migrate_from_offset($offset, $current_version, $direction) {
@@ -156,13 +163,16 @@ class Ruckusing_DB_Migrate implements Ruckusing_iTask {
 
   private function prepare_to_migrate($destination, $direction) {
     try {
-		  echo "\tMigrating " . strtoupper($direction);
-			if(!is_null($destination)) {
-			   echo " to: {$destination}\n";				
-		  } else {
-		    echo ":\n";
-		  }
-			
+        if (getenv('OUTPUT_RUCKUSING_MIGRATION')) {
+            echo "\tMigrating " . strtoupper($direction);
+
+            if (!is_null($destination)) {
+                echo " to: {$destination}\n";
+            } else {
+                echo ":\n";
+            }
+        }
+
 			$templates = $this->adapter->getTemplates($this->task_args);
 			
 			if(array_key_exists('FLAVOUR', $this->task_args))
@@ -213,11 +223,15 @@ class Ruckusing_DB_Migrate implements Ruckusing_iTask {
 						$ex = new Exception(sprintf("%s - %s", $file['class'], $e->getMessage()));
 						throw $ex;
 					}
-					$end = $this->end_timer();
-					$diff = $this->diff_timer($start, $end);
-					printf("========= %s ======== (%.2f)\n", $file['class'], $diff);
+
+                    if (getenv('OUTPUT_RUCKUSING_MIGRATION')) {
+                        $end = $this->end_timer();
+                        $diff = $this->diff_timer($start, $end);
+                        printf("========= %s ======== (%.2f)\n", $file['class'], $diff);
+                        $exec = true;
+                    }
+
 					$last_version = $file['version'];
-					$exec = true;
 				} else {
 					trigger_error("ERROR: {$klass} does not have a '{$target_method}' method defined!");
 				}			
