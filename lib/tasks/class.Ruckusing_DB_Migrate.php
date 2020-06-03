@@ -24,7 +24,6 @@ class Ruckusing_DB_Migrate implements Ruckusing_iTask {
 	private $adapter = null;
 	private $migrator_util = null;
 	private $task_args = array(); 
-	private $regexp = '/^(\d+)\_/';
 	private $debug = false;
 	
 	function __construct($adapter) {
@@ -39,8 +38,12 @@ class Ruckusing_DB_Migrate implements Ruckusing_iTask {
 	   die("This database does not support migrations.");
     }
 		$this->task_args = $args;
-		echo "Started: " . date('Y-m-d g:ia T') . "\n\n";		
-		echo "[db:migrate]: \n";
+
+        if (getenv('OUTPUT_RUCKUSING_MIGRATION')) {
+            echo "Started: " . date('Y-m-d g:ia T') . "\n\n";
+            echo "[db:migrate]: \n";
+        }
+
 		try {
   	  // Check that the schema_version table exists, and if not, automatically create it
   	  $this->verify_environment();
@@ -89,10 +92,13 @@ class Ruckusing_DB_Migrate implements Ruckusing_iTask {
 			echo "\tMigration directory does not exist: " . RUCKUSING_MIGRATION_DIR;
 		}catch(Ruckusing_Exception $ex) {
 			die("\n\n" . $ex->getMessage() . "\n\n");
-		}	
-		echo "\n\nFinished: " . date('Y-m-d g:ia T') . "\n\n";			
-	}
-	
+		}
+
+        if (getenv('OUTPUT_RUCKUSING_MIGRATION')) {
+            echo "\n\nFinished: " . date('Y-m-d g:ia T') . "\n\n";
+        }
+    }
+
 	private function migrate_from_offset($offset, $current_version, $direction) {
 		$templates = $this->adapter->getTemplates($this->task_args);
 	
@@ -124,8 +130,8 @@ class Ruckusing_DB_Migrate implements Ruckusing_iTask {
 	}
 	
 	$migrationsCount = count($migrations);
-	$targetVersion;
-	
+    $targetVersion = null;
+
     // check to see if we have enough migrations to run - the user
     // might have asked to run more than we have available
 	if(isset($migrations[$current_index+$offset]))
@@ -150,19 +156,22 @@ class Ruckusing_DB_Migrate implements Ruckusing_iTask {
 	}
 	else
 	{
-		echo "\nCurrent version equals desired version. Doesnt need to execute any migration.";
+        echo "\nCurrent version equals desired version. No need to execute any migrations.";
 	}
   }
 
   private function prepare_to_migrate($destination, $direction) {
     try {
-		  echo "\tMigrating " . strtoupper($direction);
-			if(!is_null($destination)) {
-			   echo " to: {$destination}\n";				
-		  } else {
-		    echo ":\n";
-		  }
-			
+        if (getenv('OUTPUT_RUCKUSING_MIGRATION')) {
+            echo "\tMigrating " . strtoupper($direction);
+
+            if (!is_null($destination)) {
+                echo " to: {$destination}\n";
+            } else {
+                echo ":\n";
+            }
+        }
+
 			$templates = $this->adapter->getTemplates($this->task_args);
 			
 			if(array_key_exists('FLAVOUR', $this->task_args))
@@ -176,15 +185,22 @@ class Ruckusing_DB_Migrate implements Ruckusing_iTask {
 			if(count($migrations) == 0) {
 				return "\nNo relevant migrations to run. Exiting...\n";
 			}
-			$result = $this->run_migrations($migrations, $direction, $destination);
+
+            $this->run_migrations($migrations, $direction);
 		}catch(Exception $ex) {
 			throw $ex;
 		}				
   }
 
-	private function run_migrations($migrations, $target_method, $destination) {
+    /**
+     * @param mixed[] $migrations
+     * @param string $target_method
+     * @return mixed[]
+     * @throws Exception
+     */
+	private function run_migrations($migrations, $target_method) {
 		$last_version = -1;
-		
+
 		if($target_method === 'down')
 		{
 			$migrations = array_reverse($migrations);
@@ -203,31 +219,32 @@ class Ruckusing_DB_Migrate implements Ruckusing_iTask {
 					try {
 						//start transaction
 						$this->adapter->start_transaction();
-						$result =  $obj->$target_method();
+                        $obj->$target_method();
 						//successfully ran migration, update our version and commit
-						$this->migrator_util->resolve_current_version($file['version'], $target_method, $file['template']);										
+                        $this->migrator_util->resolve_current_version($file['version'], $target_method, $file['template']);
 						$this->adapter->commit_transaction();
 					}catch(Exception $e) {
 						$this->adapter->rollback_transaction();
 						//wrap the caught exception in our own
-						$ex = new Exception(sprintf("%s - %s", $file['class'], $e->getMessage()));
-						throw $ex;
+						throw new Exception(sprintf("%s - %s", $file['class'], $e->getMessage()));
 					}
-					$end = $this->end_timer();
-					$diff = $this->diff_timer($start, $end);
-					printf("========= %s ======== (%.2f)\n", $file['class'], $diff);
+
+                    if (getenv('OUTPUT_RUCKUSING_MIGRATION')) {
+                        $end = $this->end_timer();
+                        $diff = $this->diff_timer($start, $end);
+                        printf("========= %s ======== (%.2f)\n", $file['class'], $diff);
+                    }
+
 					$last_version = $file['version'];
-					$exec = true;
 				} else {
 					trigger_error("ERROR: {$klass} does not have a '{$target_method}' method defined!");
-				}			
-			}//is_file			
-		}//foreach
+                }
+            }
+        }
 		//update the schema info
-		$result = array('last_version' => $last_version);
-		return $result;
-	}//run_migrations
-	
+        return ['last_version' => $last_version];
+    }
+
 	private function start_timer() {
 		return microtime(true);
 	}
@@ -235,18 +252,18 @@ class Ruckusing_DB_Migrate implements Ruckusing_iTask {
 	private function end_timer() {
 		return microtime(true);
 	}
-	
+
 	private function diff_timer($s, $e) {
 		return $e - $s;
 	}
-	
+
 	private function verify_environment() {
 	  if(!$this->adapter->table_exists(RUCKUSING_TS_SCHEMA_TBL_NAME) ) {
 			echo "\n\tSchema version table does not exist. Auto-creating.";
 	    $this->auto_create_schema_info_table();
     }	 
   }
-	
+
 	private function auto_create_schema_info_table() {
 	  try {
   		echo sprintf("\n\tCreating schema version table: %s", RUCKUSING_TS_SCHEMA_TBL_NAME . "\n\n");
@@ -256,7 +273,4 @@ class Ruckusing_DB_Migrate implements Ruckusing_iTask {
 		  die("\nError auto-creating 'schema_info' table: " . $e->getMessage() . "\n\n");
 	  }
 	}
-
-}//class
-
-?>
+}
